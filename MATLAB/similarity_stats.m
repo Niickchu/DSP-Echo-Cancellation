@@ -1,4 +1,4 @@
-function [corr, lags, mse, ssim_index, spec_sim, cosine_sim, ERLE, ERLE_mean] = test_similarity(audio_orig_,audio_mod_)
+function [corr, lags, mse, ssim_index, spec_sim, cosine_sim, ERLE, ERLE_mean] = similarity_stats(audio_orig_,audio_mod_)
 %TEST_SIMILARITY Summary of this function goes here
 %   Detailed explanation goes here
     %% CROSS-CORR
@@ -37,4 +37,3 @@ function [corr, lags, mse, ssim_index, spec_sim, cosine_sim, ERLE, ERLE_mean] = 
     ERLE = 10*log10(P_orig./P_echo);
     ERLE_mean = 10*log10(mean(P_orig)/mean(P_echo));
 end
-

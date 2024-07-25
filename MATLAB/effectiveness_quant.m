@@ -49,46 +49,44 @@ fs = 48000;
 y = ifft(Y);
 y = lowpass(y, lowpass_cutoff, fs);
 
-subplot(5, 1, 1);
-plot(sig_orig_trimmed);
-title('Original Signal');
-xlabel('Samples');
-ylabel('Amplitude');
-grid on;
+[mse_values, snr_values, rmse_values, erle_values, time_vector] = similarity_windows(sig_orig_padded, real(y), sig_echo_padded, fs, 1, 0);
+[mse_values2, snr_values2, rmse_values2, erle_values2, time_vector2] = similarity_windows(sig_orig_padded, sig_echo_padded, sig_echo_padded, fs, 1, 0);
+[corr, lags, mse, ssim_index, spec_sim, cosine_sim, ERLE, ERLE_mean] = similarity_stats(sig_orig_padded, real(y));
 
+time_signal = (0:length(sig_orig_padded)-1) / fs;
 
-subplot(5, 1, 2);
-plot(sig_echo_trimmed);
-title('Original Echoed Signal');
-xlabel('Samples');
-ylabel('Amplitude');
-grid on;
+x_end = max(time_vector);
+num_plots = 6;
 
-subplot(5, 1, 3);
-plot(real(y));
-title('Cleaned Signal After Echo Cancellation');
-xlabel('Samples');
-ylabel('Amplitude');
-grid on;
+subplot(num_plots, 1, 1);
+plot(time_signal, sig_orig_padded)
+title("Original Signal");
+xlim([0, x_end]);
 
-[corr1, lag1, mse1, ssim_index1, spec_sim1, cosine_sim1, ERLE1, ERLE_mean1] = test_similarity(sig_orig_padded, sig_echo_padded);
-[corr2, lags2, mse2, ssim_index2, spec_sim2, cosine_sim2, ERLE2, ERLE_mean2] = test_similarity(sig_orig_padded, real(y));
+subplot(num_plots, 1, 2);
+plot(time_signal, sig_echo_padded)
+title("Echo Signal")
+xlim([0, x_end]);
 
-fprintf("MSE before: %.4f, MSE after: %.4f\n", mse1, mse2);
-fprintf("SSIM before: %.4f, SSIM after: %.4f\n", ssim_index1, ssim_index2);
-fprintf("ERLE mean before: %.4f, ERLE mean after: %.4f\n", ERLE_mean1, ERLE_mean2);
+subplot(num_plots, 1, 3);
+plot(time_signal, real(y))
+title("Processed Signal")
+xlim([0, x_end]);
 
-subplot(5, 1, 4);
-plot(ERLE1);
+subplot(num_plots, 1, 4);
+plot(time_vector, snr_values);
+title("SNR of Orig vs Processed")
+xlim([0, x_end]);
 
-subplot(5, 1, 5);
-plot(ERLE2);
+subplot(6, 1, 5);
+plot(time_vector2, snr_values2);
+title("SNR of original vs echo")
+xlim([0, x_end]);
 
-figure;
-subplot(2, 1, 1);
-plot(corr1);
-subplot(2, 1, 2);
-plot(corr2);
+subplot(num_plots, 1, 6);
+plot(time_vector, erle_values);
+title("ERLE")
+xlim([0, x_end]);
 
 p = audioplayer(real(y), fs);
 playblocking(p);
