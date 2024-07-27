@@ -1,2 +1,9 @@
 Room Impulse Response
 Requires MATLAB MinGW-w64 C/C++ Compiler 
+
+Original Source Code from:
+https://github.com/ehabets/RIR-Generator?tab=readme-ov-file
+
+Must compile mex-function in MATLAB command window:
+mex -setup C++
+mex rir_generator.cpp rir_generator_core.cpp
