@@ -57,12 +57,18 @@ class LMS:
             e = np.zeros(num_samples)
             weights = np.zeros(self.filter_order)
 
-            for n in range(0, num_samples - p):
-                x = input_data[n + p:n:-1]
-                y[n] = np.dot(weights, x)
-                e[n] = desired_data[n + p] - y[n]
+            # for n in range(0, num_samples - p):
+            #     x = input_data[n + p:n:-1]
+            #     y[n] = np.dot(weights, x)
+            #     e[n] = desired_data[n + p] - y[n]
 
-                weights = weights + mu * e[n] * x
+            #     weights = weights + mu * e[n] * x
+
+            #this prevents the time shifting
+            for n in range(p, num_samples): #start at filter order to avoid oob error with array
+                x = input_data[n-p:n]
+                y[n] = np.dot(weights, x)
+                e[n] = desired_data[n] - y[n]
 
                 # #to prevent errors with audio clipping if weights are too large
                 # #if filtered sounds weird, then reduce mu or filter order
@@ -70,7 +76,7 @@ class LMS:
                 # if np.any(np.abs(weight_update) > 1):
                 #     weight_update = weight_update / np.max(np.abs(weight_update))
 
-                # weights += weight_update
+                weights = weights + mu * e[n] * x
 
         self.done_time = inout.get_datetime_string()
         print("Done")
@@ -79,10 +85,6 @@ class LMS:
         inout.save_audio(output_file, y, self.input_sr)
 
         return e, y, weights
-
-    def get_output_folder(self):
-        return self.folder + r"/output/"
-
 
 if __name__ == "__main__":
     lms = LMS()
@@ -113,6 +115,6 @@ if __name__ == "__main__":
 
     plt.suptitle(f'Filter Order: {lms.filter_order}, Mu: {lms.mu}', fontsize=14)
     plt.tight_layout()
-    output_file = lms.folder + r"/output/" + lms.done_time + "_graph.png"
+    output_file = inout.get_output_folder_path() + lms.done_time + "_graph.png"
     plt.savefig(output_file)
     plt.show()
