@@ -1,16 +1,26 @@
 import input_output as inout
 import numpy as np
 from matplotlib import pyplot as plt
+import librosa
+import pyroomacoustics as pra
 
 class LMS:
-    def __init__(self):
+    def __init__(self, input_data=[], desired_data=[], sr=None):
+
         self.folder = inout.get_current_folder()
 
-        mp3_file = self.folder + r"/samples/CUT1-ECHO.mp3"
-        self.input_audio_data, self.input_sr = inout.read_audio(mp3_file)
+        if input_data == []:
+            mp3_file = self.folder + r"/samples/CUT1-ECHO.mp3"
+            self.input_audio_data, self.input_sr = inout.read_audio(mp3_file)
+        else:
+            self.input_audio_data = input_data
+            self.input_sr = sr
 
-        mp3_file = self.folder + r"/samples/CUT1-ORIG.mp3"
-        self.desired_audio_data, self.desired_sr = inout.read_audio(mp3_file)
+        if desired_data == []:
+            mp3_file = self.folder + r"/samples/CUT1-ORIG.mp3"
+            self.desired_audio_data, _ = inout.read_audio(mp3_file)
+        else:
+            self.desired_audio_data = desired_data
 
         #these are the same length mp3s, but for future..
         min_length = min(len(self.desired_audio_data), len(self.input_audio_data))
@@ -24,7 +34,6 @@ class LMS:
     def filter_freq_domain(self, input_data=None, desired_data=None, mu=None, filter_order=None):
         pass
 
-
     def filter_time_domain(self, input_data=None, desired_data=None, mu=None, filter_order=None):
         
         if input_data == None:
@@ -34,12 +43,10 @@ class LMS:
             desired_data = self.desired_audio_data
 
         if mu == None:
-            self.mu = 0.001
-            mu = 0.001
+            self.mu = mu = 0.02
 
         if filter_order == None:
-            self.filter_order = 4096    #just for plotting
-            filter_order = 4096
+            self.filter_order = filter_order = 1024    #just for plotting
 
 
         print("Data Length: " + str(len(input_data)) + "\tmu: " + str(mu) + "\tfilter order: " + str(filter_order))
@@ -84,9 +91,55 @@ class LMS:
         output_file = self.folder + r"/output/" + self.done_time + "_time_filtered" + ".mp3"
         inout.save_audio(output_file, y, self.input_sr)
 
+
+        # lowpass_cutoff = 2000
+        # filtered_y = apply_lowpass_filter(y, lowpass_cutoff, self.input_sr)
+
+
+        # lowpass_output_file = self.folder + r"/output/" + self.done_time + "_lowpass_filtered" + ".mp3"
+        # inout.save_audio(lowpass_output_file, filtered_y, self.input_sr)
         return e, y, weights
+    
+    def get_metrics(self):
+        pass
 
 if __name__ == "__main__":
+    print("Creating Echo Signal...")
+
+    samples_folder = inout.get_samples_folder_path()
+
+    filename = samples_folder + r"/female.wav"
+    x, sr  = librosa.load(filename,sr=8000)
+    filename = samples_folder + r"/male.wav"
+    d, sr  = librosa.load(filename,sr=8000)
+
+    rt60_tgt = 1.5   # desired reverberation time (the time in seconds for the energy to drop by 60 dB)
+    room_dim = [5, 5, 5]
+
+    e_absorption, max_order = pra.inverse_sabine(rt60_tgt, room_dim)
+    room = pra.ShoeBox(room_dim, fs=sr, materials=pra.Material(e_absorption), max_order=max_order)
+    room.add_source([1.5, 1.5, 1.5])
+    room.add_microphone([0.1, 0.5, 0.1])
+    room.compute_rir()
+    rir = room.rir[0][0]  #rir = room impulse response
+    rir = rir[np.argmax(rir):]  
+
+    y = np.convolve(x,rir)  #x[n] * h[n] = echo component of final signal
+    scale = np.sqrt(np.mean(x**2)) /  np.sqrt(np.mean(y**2))
+    y = y*scale
+
+    L = max(len(y),len(d))
+    y = np.pad(y,[0,L-len(y)])
+    d = np.pad(d,[L-len(d),0])
+    x = np.pad(x,[0,L-len(x)])
+
+    output_folder = inout.get_output_folder_path()
+    filename = output_folder + r"/original_signal.wav"
+    inout.save_audio(filename, x, sr)
+    filename = output_folder + r"/echoed_signal.wav"
+    inout.save_audio(filename, y, sr)
+
+    lms = LMS(y, x, sr)
     lms = LMS()
     error, output, weights = lms.filter_time_domain()
 
