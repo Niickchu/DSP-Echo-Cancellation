@@ -25,8 +25,10 @@ INPUT_DIR = 'samples'
 OUTPUT_WAV = 'fdaf_audio'
 OUTPUT_PLOTS = 'fdaf_plots'
 
-M = 128
-MU = 0.2
+# M = 256
+# MU = 0.1
+M_list = [32, 64, 128, 256, 512, 1024, 2048]
+MU_list = [0.01, 0.03, 0.05, 0.1, 0.15, 0.2]
 
 def compute_mse_and_snr(ideal_signal, real_signal):
     """
@@ -51,6 +53,7 @@ def compute_mse_and_snr(ideal_signal, real_signal):
     # Calculate SNR
     signal_power = np.mean(ideal_signal ** 2)
     noise_power = np.mean((ideal_signal - real_signal) ** 2)
+    #print(signal_power, noise_power)
     snr = 10 * np.log10(signal_power / noise_power)
 
     return mse, snr
@@ -85,39 +88,63 @@ def main():
     #sf.write(f'{OUTPUT_DIR}/speech1.wav', speech1, sr, subtype='PCM_16')
     #sf.write(f'{OUTPUT_DIR}/near_end_signal.wav', near_end_signal, sr, subtype='PCM_16')
 
-    e = fdaf(speech1, near_end_signal, M=M, mu=MU)
-    e = np.clip(e,-1,1)
-    sf.write(f'{OUTPUT_WAV}/M_{M}_mu_{MU}.wav', e, sr, subtype='PCM_16')
+    for MU in [0.1]:
+        mse_list = []
+        snr_list = []
+        for M in M_list:
+            print(f'Filter Length: {M}, Mu: {MU}')
+            e = fdaf(speech1, near_end_signal, M=M, mu=MU)
+            e = np.clip(e,-1,1)
+            ideal = speech2[0:len(e)]
 
-    plt.figure(figsize=(20, 12))
-    
-    t = np.arange(len(speech1)) / sr
-    plt.subplot(4, 1, 2)
-    plt.title('Far-end signal')
-    plt.plot(t, speech1)
-    
-    t = np.arange(len(near_end_signal)) / sr
-    plt.subplot(4, 1, 1)
-    plt.title('Microphone picked signal')
-    plt.plot(t, near_end_signal)
+            # sf.write(f'{OUTPUT_WAV}/M_{M}_mu_{MU}.wav', e, sr, subtype='PCM_16')
 
-    t = np.arange(len(e)) / sr
-    plt.subplot(4, 1, 3)
-    plt.title('Filtered signal')
-    plt.plot(t, e)
+            # plt.figure(figsize=(16, 12))
+            
+            # t = np.arange(len(speech1)) / sr
+            # plt.subplot(4, 1, 1)
+            # plt.title('Far-end signal')
+            # plt.plot(t, speech1)
+            
+            # t = np.arange(len(near_end_signal)) / sr
+            # plt.subplot(4, 1, 2)
+            # plt.title('Microphone picked signal')
+            # plt.plot(t, near_end_signal)
 
-    t = np.arange(len(speech2)) / sr
-    plt.subplot(4, 1, 4)
-    plt.title('Ideal signal (if echo did not exist)')
-    plt.plot(t, speech2)
+            # t = np.arange(len(e)) / sr
+            # plt.subplot(4, 1, 3)
+            # plt.title('Filtered signal')
+            # plt.plot(t, e)
 
-    plt.suptitle(f'Filter Length: {M}, Mu: {MU}', fontsize=14)
-    plt.savefig(f"{OUTPUT_PLOTS}/M_{M}_step_{MU}.png")
-    
-    mse, snr = compute_mse_and_snr(speech2, e)
+            # plt.subplot(4, 1, 4)
+            # plt.title('Ideal signal (if echo did not exist)')
+            # plt.plot(t, ideal)
 
-    print(f"MSE: {mse}")
-    print(f"SNR: {snr} dB")
+            # plt.suptitle(f'Filter Length: {M}, Mu: {MU}', fontsize=10)
+            # plt.savefig(f"{OUTPUT_PLOTS}/M_{M}_step_{MU}.png")
+            
+            mse, snr = compute_mse_and_snr(ideal[60000:], e[60000:])
+
+            #print(f"MSE: {mse}")
+            #print(f"SNR: {snr} dB")
+            snr_list.append(snr)
+            mse_list.append(mse)
+        
+        plt.figure(figsize=(20, 16))
+            
+        plt.subplot(2, 1, 1)
+        plt.title('Mean Squared Error')
+        plt.ylabel('MSE')
+        plt.xlabel('Filter Length')
+        plt.plot(M_list, mse_list)
+        
+        plt.subplot(2, 1, 2)
+        plt.title('Signal-to-Noise Ratio')
+        plt.ylabel('SNR (dB)')
+        plt.xlabel('Filter Length')
+        plt.plot(M_list, snr_list)
+
+        plt.show()
 
 
 if __name__ == '__main__':
