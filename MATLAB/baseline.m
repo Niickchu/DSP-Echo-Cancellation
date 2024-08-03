@@ -141,7 +141,7 @@ erles = zeros(1, length(M_list));
 disp(MU_list(min_i))
 
 for i = 1:length(M_list)
-    mu = MU_list(min_i);                     % Step size
+    mu = MU_list(min_i);
     blockLength = M_list(i);
 
     
@@ -195,7 +195,7 @@ for i = 1:length(M_list)
     near_power = mean(near_end_signal.^2);
     processed_power = mean(y.^2);
     % Calculate ERLE (in dB)
-    erle = 10 * log10(near_power / processed_power);  % Assuming signal_power is the desired signal power
+    erle = 10 * log10(near_power / processed_power);
     % Store MSE and SNR values
     mses(i) = mse;
     snrs(i) = snr;
