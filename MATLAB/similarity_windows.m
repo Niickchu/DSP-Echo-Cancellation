@@ -29,10 +29,14 @@ function [mse_values, snr_values, rmse_values, erle_values, time_vector] = simil
         snr_values(k) = 10 * log10(signal_power / noise_power);
     
         % Calculate ERLE, residual echo after processing
-        P_original = mean(original_window.^2);
-        residual_echo = echoed_window - processed_window;
-        P_residual = mean(residual_echo.^2);
-        erle_values(k) = 10 * log10(P_original / P_residual);
+        P_echo = mean(echoed_window.^2);
+        % residual_echo = echoed_window - processed_window;
+        P_processed = mean(processed_window.^2);
+        erle_values(k) = 10 * log10(P_echo / P_processed);
+
+        % e = (processed_window - echoed_window).^2;
+        % erle_values(k) = -10*log10(e / (original_window).^2);
+
     end
     
     % Create time vector for plotting

@@ -1,3 +1,5 @@
 *.asv
 venv/
 *.pyc
+fdaf_audio/
+fdaf_plots/
