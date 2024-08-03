@@ -2,7 +2,7 @@ addpath("RIR\")
 
 % Load audio files
 male_speech = audioread("../Python/samples/male.wav");
-female_speech = audioread("../Python/samples/male.wav");
+female_speech = audioread("../Python/samples/female.wav");
 
 % Room parameters
 c = 340;                    % Sound velocity (m/s)
@@ -30,16 +30,19 @@ female_echoed = [female_echoed; zeros(L - length(female_echoed), 1)];
 female_speech = [female_speech; zeros(L - length(female_speech), 1)];
 male_speech = [male_speech; zeros(L - length(male_speech), 1)];
 
+figure;
+plot(female_echoed);
+
 % Adaptive filtering parameters
 M_list = [32, 64, 128, 256, 512, 1024, 2048];
-MU_list = [0.000001, 0.00001, 0.0001, 0.001, 0.01, 0.02, 0.03, 0.04, 0.05, 0.075, 0.1, 0.15, 0.2];
+MU_list = [0.02, 0.03, 0.04, 0.05, 0.075, 0.1, 0.15, 0.2];
 mses = zeros(1, length(MU_list));
 snrs = zeros(1, length(MU_list));
 erles = zeros(1, length(MU_list));
 
 for i = 1:length(MU_list)
     mu = MU_list(i);                     % Step size
-    blockLength = 1024;
+    blockLength = 512;
 
     L = max([length(female_echoed), length(male_speech), length(female_speech)]);
     if mod(L, blockLength) ~= 0
@@ -59,49 +62,51 @@ for i = 1:length(MU_list)
 
     % Create the adaptive filter
     hFDAF = dsp.FrequencyDomainAdaptiveFilter('BlockLength', blockLength, ...
-                                              'StepSize', mu, 'AveragingFactor', 0.90, ...
-                                              'InitialCoefficients', 0, ...
-                                              "InitialPower", 0.01, ...
-                                              "LeakageFactor", 0.95);
+                                              'StepSize', mu, 'AveragingFactor', 0.90)
     
     % FFT of the signals
     D = fft(male_speech_);
     X = fft(near_end_signal);
     
     % Apply the adaptive filter
-    [Y, e] = hFDAF(D, X);
-    
+    Y = hFDAF(D, X);
+
     % Inverse FFT to get the time-domain signal and error
     y = ifft(Y);
     y = real(y);
-    e = ifft(e);
-    e = real(e);
-    
-    % Trimming to ensure the lengths match for error calculation
-    male_cut = male_speech_(1:length(y));
-    y = y(60000:end);
-    male_cut = male_cut(60000:end);
-    
+
     % Calculate MSE
-    mse = mean(abs(e(60000:end)).^2);  
+    mse = mean((male_speech_ - y).^2);
     
-    % Calculate signal power and noise power
-    signal_power = mean(male_cut.^2);
-    noise_power = mean(abs(e(60000:end)).^2);  
-    
-    % Calculate SNR
+    % Calculate SNR (in dB)
+    signal_power = mean(male_speech_.^2);
+    noise_power = mean((male_speech_ - y).^2);
     snr = 10 * log10(signal_power / noise_power);
     
-    P_signal = mean(male_speech.^2);
-    % Calculate the power of the echo signal
-    P_echo = mean(e.^2);
-    % Calculate ERLE
-    ERLE = 10 * log10(P_signal / P_echo);
+    near_power = mean(near_end_signal.^2);
+    processed_power = mean(y.^2);
+    % Calculate ERLE (in dB)
+    erle = 10 * log10(near_power / processed_power);  % Assuming signal_power is the desired signal power
+
+
+    if i == 5
+        figure;
+        subplot(3, 1, 1);
+        plot(y)
+        subplot(3, 1, 2);
+        plot(male_speech_)
+        subplot(3, 1, 3);
+        plot(female_echoed_)
+        % p1 = audioplayer(y, fs);
+        % playblocking(p1);
+        % p1 = audioplayer(near_end_signal, fs);
+        % playblocking(p1);
+    end
 
     % Store MSE and SNR values
     mses(i) = mse;
     snrs(i) = snr;
-    erles(i) = ERLE;
+    erles(i) = erle;
 end
 
 % Plot results
@@ -127,13 +132,13 @@ ylabel('ERLE');
 
 sgtitle("Step Size vs Fixed Block Size (512)")
 
-[val, min_i] = min(mses)
-MU_list(min_i)
-MU_list(min_i)
+[val, min_i] = min(mses);
 
 mses = zeros(1, length(M_list));
 snrs = zeros(1, length(M_list));
 erles = zeros(1, length(M_list));
+
+disp(MU_list(min_i))
 
 for i = 1:length(M_list)
     mu = MU_list(min_i);                     % Step size
@@ -159,10 +164,7 @@ for i = 1:length(M_list)
 
     % Create the adaptive filter
     hFDAF = dsp.FrequencyDomainAdaptiveFilter('BlockLength', blockLength, ...
-                                              'StepSize', mu, 'AveragingFactor', 0.90, ...
-                                              'InitialCoefficients', 0, ...
-                                              "InitialPower", 0.01, ...
-                                              "LeakageFactor", 0.9);
+                                              'StepSize', mu, 'AveragingFactor', 0.90)
     
     % FFT of the signals
     D = fft(male_speech_);
@@ -178,37 +180,31 @@ for i = 1:length(M_list)
     e = real(e);
     
     % Trimming to ensure the lengths match for error calculation
-    male_cut = male_speech_(1:length(y));
-    y = y(60000:end);
-    male_cut = male_cut(60000:end);
+    % male_cut = male_speech_(1:length(y));
+    % y = y(60000:end);
+    % male_cut = male_cut(60000:end);
     
     % Calculate MSE
-    mse = mean(abs(e(60000:end)).^2);  
+    mse = mean((male_speech_ - y).^2);
     
-    % Calculate signal power and noise power
-    signal_power = mean(male_cut.^2);
-    noise_power = mean(abs(e(60000:end)).^2);  
-    
-    % Calculate SNR
+    % Calculate SNR (in dB)
+    signal_power = mean(male_speech_.^2);
+    noise_power = mean((male_speech_ - y).^2);
     snr = 10 * log10(signal_power / noise_power);
     
-    P_signal = mean(male_speech.^2);
-    
-    % Calculate the power of the echo signal
-    P_echo = mean(e.^2);
-    
-    % Calculate ERLE
-    ERLE = 10 * log10(P_signal / P_echo);
-
+    near_power = mean(near_end_signal.^2);
+    processed_power = mean(y.^2);
+    % Calculate ERLE (in dB)
+    erle = 10 * log10(near_power / processed_power);  % Assuming signal_power is the desired signal power
     % Store MSE and SNR values
     mses(i) = mse;
     snrs(i) = snr;
-    erles(i) = ERLE;
+    erles(i) = erle;
 end
 
 % Plot results
 figure;
-sgtitle("Block Size vs Fixed Step Size (0.001)")
+sgtitle("Block Size vs Fixed Step Size (0.04)")
 
 subplot(3, 1, 1);
 plot(M_list, mses);
@@ -227,7 +223,3 @@ plot(M_list, erles);
 title('ERLE vs. Step Size (M)');
 xlabel('Block Size (M)');
 ylabel('ERLE');
-
-[val, min_i] = min(mses)
-[val, min_i] = max(snrs)
-[val, min_i] = min(ERLE)
