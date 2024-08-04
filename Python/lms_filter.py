@@ -30,21 +30,13 @@ class LMS:
         self.mu = None
         self.filter_order = None
 
-    def filter_time_domain(self, input_data=None, desired_data=None, mu=None, filter_order=None):
+    def filter_time_domain(self, mu, filter_order, save_data):
         
-        if input_data == None:
-            input_data = self.input_audio_data
+        input_data = self.input_audio_data
+        desired_data = self.desired_audio_data
 
-        if desired_data == None:
-            desired_data = self.desired_audio_data
-
-        if mu == None:
-            self.mu = mu = 0.15
-
-        if filter_order == None:
-            self.filter_order = filter_order = 256    #just for plotting
-
-
+        self.mu = mu
+        self.filter_order = filter_order    #so I can plot later
 
         num_samples = len(input_data)
         weights = np.zeros(self.filter_order)
@@ -53,109 +45,189 @@ class LMS:
         e = np.zeros(num_samples)
 
         # https://en.wikipedia.org/wiki/Least_mean_squares_filter#LMS_algorithm_summary
-        epochs = 1      #epochs Don't seem to have an effect
-        for i in range(epochs):
-            print("Epoch #: " + str(i+1))
-            e = np.zeros(num_samples)
-            weights = np.zeros(self.filter_order)
+        printed_flag = False
+        for n in range(0, num_samples - p):
+            x = input_data[n + p:n:-1]
+            y[n] = np.dot(weights, x)
+            e[n] = desired_data[n] - y[n]
 
-            for n in range(0, num_samples - p):
-                x = input_data[n + p:n:-1]
-                y[n] = np.dot(weights, x)
-                e[n] = desired_data[n] - y[n]
+            # #to prevent errors with audio clipping if weights are too large
+            #if filtered sounds weird, then reduce mu or filter order
+            weights = weights + mu * e[n] * x
+            if np.any(np.abs(weights) > 1):
+                if not printed_flag:
+                    print("Clipping with Mu: " + str(mu) + " Filter Order: " + str(filter_order))
+                    printed_flag = True
+                weights = weights / np.max(np.abs(weights))
 
-                weights = weights + mu * e[n] * x
+                # weights = weights + mu * e[n] * x
 
-            # #this prevents the time shifting
-            # for n in range(p, num_samples): #start at filter order to avoid oob error with array
-            #     x = input_data[n-p:n]
-            #     y[n] = np.dot(weights, x)
-            #     e[n] = desired_data[n] - y[n]
+        #print("Done")
 
-            #     # #to prevent errors with audio clipping if weights are too large
-            #     # #if filtered sounds weird, then reduce mu or filter order
-            #     # weight_update = 2 * mu * e[n] * x
-            #     # if np.any(np.abs(weight_update) > 1):
-            #     #     weight_update = weight_update / np.max(np.abs(weight_update))
-
-            #     weights = weights + mu * e[n] * x
-
-        self.done_time = inout.get_datetime_string()
-        print("Done")
-
-        output_file = self.folder + r"/output/" + self.done_time + "_time_filtered" + ".mp3"
-        inout.save_audio(output_file, y, self.input_sr)
+        if save_data:
+            self.done_time = inout.get_datetime_string()
+            output_file = self.folder + r"/output/" + self.done_time + "_time_filtered" + ".mp3"
+            inout.save_audio(output_file, e, self.input_sr)
 
         return e, y, weights
     
-    def get_metrics(self):
-        pass
+
+    def compute_mse_and_snr(self, ideal_signal, real_signal):
+
+        ideal_signal = np.asarray(ideal_signal)
+        real_signal = np.asarray(real_signal)
+
+        mse = np.mean((ideal_signal - real_signal) ** 2)
+
+        signal_power = np.mean(ideal_signal ** 2)
+        noise_power = np.mean((ideal_signal - real_signal) ** 2)
+        snr = 10 * np.log10(signal_power / noise_power)
+
+        return mse, snr
+
+    
+    def grid_search(self, mu_values, order_values, save_data):
+
+        mse_matrix = np.zeros((len(order_values), len(mu_values)))
+        snr_matrix = np.zeros((len(order_values), len(mu_values)))
+
+        # Initialize best values
+        best_mse = float('inf')
+        best_snr = float('-inf')
+        best_mu = None
+        best_order = None
+
+        for i, _mu in enumerate(mu_values):
+            for j, _order in enumerate(order_values):
+
+                error, _, _ = lms.filter_time_domain(_mu, _order, save_data)
+
+                error = np.clip(error, -1, 1)
+                ideal = speech2[0:len(error)]
+                mse, snr = self.compute_mse_and_snr(ideal[60000:], error[60000:])
+
+                mse_matrix[j, i] = mse
+                snr_matrix[j, i] = snr
+
+                if mse < best_mse:
+                    best_mse = mse
+                    best_snr = snr
+                    best_mu = _mu
+                    best_order = _order
+
+        print("Best MSE:", best_mse)
+        print("Best SNR(dB):", best_snr)
+        print("Best MU:", best_mu)
+        print("Best Filter Order:", best_order)
+
+        # https://www.geeksforgeeks.org/how-to-draw-2d-heatmap-using-matplotlib-in-python/
+        plt.figure(figsize=(12, 6))
+        plt.imshow(mse_matrix, aspect='auto', origin='lower', extent=[0, len(mu_values), 0, len(order_values)])
+        plt.colorbar(label='MSE')
+        plt.title('MSE Heatmap')
+        plt.xlabel('Mu')
+        plt.ylabel('Filter Order')
+        plt.xticks(ticks=np.arange(len(mu_values)), labels=mu_values)
+        plt.yticks(ticks=np.arange(len(order_values)), labels=order_values)
+        plt.tight_layout()
+        plt.savefig('mse_heatmap.png')
+        
+        # Plot SNR heatmap
+        plt.figure(figsize=(12, 6))
+        plt.imshow(snr_matrix, aspect='auto', origin='lower', extent=[0, len(mu_values), 0, len(order_values)])
+        plt.colorbar(label='SNR (dB)')
+        plt.title('SNR Heatmap')
+        plt.xlabel('Mu')
+        plt.ylabel('Filter Order')
+        plt.xticks(ticks=np.arange(len(mu_values)), labels=mu_values)
+        plt.yticks(ticks=np.arange(len(order_values)), labels=order_values)
+        plt.tight_layout()
+        plt.savefig('snr_heatmap.png')
+        
+        return best_mse, best_snr, best_mu, best_order
 
 if __name__ == "__main__":
     print("Creating Echo Signal...")
 
-    # samples_folder = inout.get_samples_folder_path()
+    samples_folder = inout.get_samples_folder_path()
 
-    # filename = samples_folder + r"/female.wav"
-    # x, sr  = librosa.load(filename,sr=8000)
-    # filename = samples_folder + r"/male.wav"
-    # d, sr  = librosa.load(filename,sr=8000)
+    filename = samples_folder + r"/female.wav"
+    speech1, sr  = librosa.load(filename,sr=8000)
+    filename = samples_folder + r"/male.wav"
+    speech2, sr  = librosa.load(filename,sr=8000)
 
-    # rt60_tgt = 1.5   # desired reverberation time (the time in seconds for the energy to drop by 60 dB)
-    # room_dim = [5, 5, 5]
+    rt60_tgt = 0.08
+    room_dim = [2, 2, 2]
 
-    # e_absorption, max_order = pra.inverse_sabine(rt60_tgt, room_dim)
-    # room = pra.ShoeBox(room_dim, fs=sr, materials=pra.Material(e_absorption), max_order=max_order)
-    # room.add_source([1.5, 1.5, 1.5])
-    # room.add_microphone([0.1, 0.5, 0.1])
-    # room.compute_rir()
-    # rir = room.rir[0][0]  #rir = room impulse response
-    # rir = rir[np.argmax(rir):]  
+    e_absorption, max_order = pra.inverse_sabine(rt60_tgt, room_dim)
+    room = pra.ShoeBox(room_dim, fs=sr, materials=pra.Material(e_absorption), max_order=max_order)
+    room.add_source([1.5, 1.5, 1.5])
+    room.add_microphone([0.1, 0.5, 0.1])
+    room.compute_rir()
+    rir = room.rir[0][0]
+    rir = rir[np.argmax(rir):]
 
-    # y = np.convolve(x,rir)  #x[n] * h[n] = echo component of final signal
-    # scale = np.sqrt(np.mean(x**2)) /  np.sqrt(np.mean(y**2))
-    # y = y*scale
+    speech1_echoed = np.convolve(speech1,rir)
+    scale = np.sqrt(np.mean(speech1**2)) /  np.sqrt(np.mean(speech1_echoed**2))
+    speech1_echoed = speech1_echoed*scale
 
-    # L = max(len(y),len(d))
-    # y = np.pad(y,[0,L-len(y)])
-    # d = np.pad(d,[L-len(d),0])
-    # x = np.pad(x,[0,L-len(x)])
+    
+    L = max(len(speech1_echoed),len(speech2))
+    speech1_echoed = np.pad(speech1_echoed,[0,L-len(speech1_echoed)])
+    speech2 = np.pad(speech2,[L-len(speech2),0])
+    speech1 = np.pad(speech1,[0,L-len(speech1)])
+    near_end_signal = speech2 + speech1_echoed
 
-    # output_folder = inout.get_output_folder_path()
-    # filename = output_folder + r"/original_signal.wav"
-    # inout.save_audio(filename, x, sr)
-    # filename = output_folder + r"/echoed_signal.wav"
-    # inout.save_audio(filename, y, sr)
+    output_folder = inout.get_output_folder_path()
+    filename = output_folder + r"/echoed_signal.wav"
+    inout.save_audio(filename, near_end_signal, sr)
 
-    # lms = LMS(y, x, sr)
-    lms = LMS()
-    error, output, weights = lms.filter_time_domain()
+    print("Echo Created")
 
-    #error is the difference between desired and filtered
-    #output is the filtered
-    #weights are just the weights used
+    lms = LMS(speech1 , near_end_signal, sr)
 
-    t = np.arange(len(output)) / lms.input_sr
+    mu_vals = [0.0001, 0.001, 0.01, 0.1, 0.2, 0.4]
+    or_vals = [8, 16, 32, 64, 128]
 
+    print("Starting Grid Search...")
+    _, _, best_mu, best_order = lms.grid_search(mu_vals, or_vals, False)
+    print("Done")
+
+    error, output, _ = lms.filter_time_domain(best_mu, best_order, True)
+
+
+    error = np.clip(error,-1,1)
+    ideal = speech2[0:len(error)]
     plt.figure(figsize=(12, 8))
+            
+    t = np.arange(len(speech1)) / sr
     plt.subplot(4, 1, 1)
-    plt.title('Desired Signal')
-    plt.plot(t, lms.desired_audio_data)
-
+    plt.title('Far-end signal')
+    plt.plot(t, speech1)
+    
+    t = np.arange(len(near_end_signal)) / sr
     plt.subplot(4, 1, 2)
-    plt.title('Echo Signal')
-    plt.plot(t, lms.input_audio_data)
+    plt.title('Microphone picked signal')
+    plt.plot(t, near_end_signal, label='Near End Signal')
+    plt.plot(t, speech2, color='red', label="Bob's Voice")
 
+    t = np.arange(len(error)) / sr
     plt.subplot(4, 1, 3)
-    plt.title('Filtered Signal')
-    plt.plot(t, output)
+    plt.title('Filtered signal')
+    plt.plot(t, error)
 
     plt.subplot(4, 1, 4)
-    plt.title('Error Signal (Echo Cancelled)')
-    plt.plot(t, error)
+    plt.title('Ideal signal (if echo did not exist)')
+    plt.plot(t, ideal)
 
     plt.suptitle(f'Filter Order: {lms.filter_order}, Mu: {lms.mu}', fontsize=14)
     plt.tight_layout()
     output_file = inout.get_output_folder_path() + lms.done_time + "_graph.png"
     plt.savefig(output_file)
+
+    mse, snr = lms.compute_mse_and_snr(ideal[60000:], error[60000:])
     plt.show()
+
+
+
+
