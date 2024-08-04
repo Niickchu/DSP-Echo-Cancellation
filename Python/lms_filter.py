@@ -193,7 +193,6 @@ if __name__ == "__main__":
 
     error, output, _ = lms.filter_time_domain(best_mu, best_order, True)
 
-
     error = np.clip(error,-1,1)
     ideal = speech2[0:len(error)]
     plt.figure(figsize=(12, 8))
@@ -203,13 +202,11 @@ if __name__ == "__main__":
     plt.title('Far-end signal')
     plt.plot(t, speech1)
     
-    t = np.arange(len(near_end_signal)) / sr
     plt.subplot(4, 1, 2)
     plt.title('Microphone picked signal')
     plt.plot(t, near_end_signal, label='Near End Signal')
     plt.plot(t, speech2, color='red', label="Bob's Voice")
 
-    t = np.arange(len(error)) / sr
     plt.subplot(4, 1, 3)
     plt.title('Filtered signal')
     plt.plot(t, error)
