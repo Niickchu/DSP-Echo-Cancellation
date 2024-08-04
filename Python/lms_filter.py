@@ -91,7 +91,6 @@ class LMS:
         mse_matrix = np.zeros((len(order_values), len(mu_values)))
         snr_matrix = np.zeros((len(order_values), len(mu_values)))
 
-        # Initialize best values
         best_mse = float('inf')
         best_snr = float('-inf')
         best_mu = None
@@ -131,8 +130,7 @@ class LMS:
         plt.yticks(ticks=np.arange(len(order_values)), labels=order_values)
         plt.tight_layout()
         plt.savefig('mse_heatmap.png')
-        
-        # Plot SNR heatmap
+
         plt.figure(figsize=(12, 6))
         plt.imshow(snr_matrix, aspect='auto', origin='lower', extent=[0, len(mu_values), 0, len(order_values)])
         plt.colorbar(label='SNR (dB)')
