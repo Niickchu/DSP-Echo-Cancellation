@@ -8,7 +8,7 @@ def get_current_folder():
     return os.path.dirname(os.path.abspath(__file__))
 
 def get_samples_folder_path():
-    return os.path.dirname(os.path.abspath(__file__)) + r"/samples"
+    return os.path.dirname(os.path.abspath(__file__)) + r"/samples/"
 
 def get_output_folder_path():
     return os.path.dirname(os.path.abspath(__file__)) + r"/output/"
